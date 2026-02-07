@@ -20,7 +20,7 @@ import {
   Zap
 } from 'lucide-react';
 
-const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby6SLD1JtNU63UeIdWkUQBtiyz-lx38_8cIRYE6orP5Rm6m_PcxPpHTZhObyW3QqGvaWw/exec"; 
+const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby7upnZmyvNrbfS9vP48Pa4gXm9ZHTKaqRsgu7NY5i-qsA2D9S0mrYWU6aHmo3ni9TfFw/exec"; 
 const STORAGE_KEY = "ssemj_opr_draft";
 
 const INITIAL_REPORT_DATA: ReportData = {
