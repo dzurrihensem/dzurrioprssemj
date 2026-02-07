@@ -58,7 +58,7 @@ const App: React.FC = () => {
   const [archive, setArchive] = useState<ArchiveItem[]>([]);
   const [isLoadingArchive, setIsLoadingArchive] = useState(false);
 
-  // --- FUNGSI AI SMART SUGGEST (REPAIRED & STABLE) ---
+  // --- FUNGSI AI SMART SUGGEST (DIRECT CALL MODE) ---
   const handleGenerateAI = async () => {
     if (!reportData.tajuk) {
       alert("Sila isi Tajuk Program terlebih dahulu!");
@@ -67,7 +67,7 @@ const App: React.FC = () => {
 
     let key = localStorage.getItem("GEMINI_API_KEY");
     if (!key) {
-      key = prompt("Sila masukkan API KEY Gemini anda (Sekali sahaja):");
+      key = prompt("Sila masukkan API KEY Gemini anda:");
       if (key) {
         localStorage.setItem("GEMINI_API_KEY", key);
       } else return;
@@ -76,27 +76,31 @@ const App: React.FC = () => {
     setIsAIThinking(true);
 
     try {
-      const response = await fetch(GAS_WEBAPP_URL, {
+      // Panggil Google Gemini API secara terus (Memintas Apps Script)
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
         method: "POST",
         headers: {
-          'Content-Type': 'text/plain;charset=utf-8',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          action: "generateAI",
-          tajuk: reportData.tajuk,
-          apiKey: key
+          contents: [{ 
+            parts: [{ 
+              text: `Berikan 3 objektif dan 2 impak profesional dalam Bahasa Melayu untuk program sekolah bertajuk: ${reportData.tajuk}. Pastikan output dalam format tepat begini: [OBJEKTIF] isi teks [IMPAK] isi teks` 
+            }] 
+          }]
         })
       });
 
       const result = await response.json();
       
-      if (result.error) throw new Error(result.error);
+      if (result.error) {
+        throw new Error(result.error.message || "API Key tidak sah atau tamat kuota.");
+      }
 
-      // SAFE PARSING: Mencari teks dalam struktur JSON Gemini
       if (result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
         const fullText = result.candidates[0].content.parts[0].text;
         
-        // Logik pecah teks mengikut tag [IMPAK] tanpa case-sensitive
+        // Logik pecah teks secara selamat
         const parts = fullText.split(/\[IMPAK\]/i);
         const objText = parts[0].replace(/\[OBJEKTIF\]/i, "").trim();
         const impakText = parts[1] ? parts[1].trim() : "";
@@ -106,11 +110,15 @@ const App: React.FC = () => {
           impak: impakText
         });
       } else {
-        throw new Error("Format data AI tidak dikenali.");
+        throw new Error("AI tidak memulangkan respon yang sah.");
       }
     } catch (err: any) {
       console.error(err);
-      alert("Ralat AI: Pastikan Deployment Apps Script adalah Versi Terkini (New Version).");
+      alert("Ralat AI: " + err.message);
+      // Jika ralat berkaitan API Key, kita kosongkan supaya user boleh masukkan key baru
+      if (err.message.includes("API")) {
+        localStorage.removeItem("GEMINI_API_KEY");
+      }
     } finally {
       setIsAIThinking(false);
     }
