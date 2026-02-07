@@ -19,7 +19,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzAJqWreL7bLvCHS3ljpDsd0rKQJ3xfzRajZqDn8HwBVQd3l-ERaJI0uyFutsC181pmYw/exec"; 
+const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby6SLD1JtNU63UeIdWkUQBtiyz-lx38_8cIRYE6orP5Rm6m_PcxPpHTZhObyW3QqGvaWw/exec"; 
 const STORAGE_KEY = "ssemj_opr_draft";
 
 const INITIAL_REPORT_DATA: ReportData = {
