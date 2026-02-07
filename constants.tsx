@@ -199,3 +199,16 @@ export const DRIVE_FOLDER_IDS: Record<Bidang, string> = {
   [Bidang.HEM]: '1Az9Mi4GYWZtpR4hn68vNJCNSLdKftw4M',
   [Bidang.KESENIAN]: '1v0COhvlERSVS20DgdCumIi4Y-FunuL03',
 };
+// --- TAMBAHAN UNTUK ARKIB PUSAT ---
+
+// GANTIKAN URL ini dengan URL Web App yang anda dapat selepas 'Deploy' Apps Script V24.17
+export const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzAJqWreL7bLvCHS3ljpDsd0rKQJ3xfzRajZqDn8HwBVQd3l-ERaJI0uyFutsC181pmYw/exec";
+
+// Interface untuk struktur data arkib (pilihan, baik untuk TypeScript)
+export interface ArkibItem {
+  tarikh: string;
+  bidang: string;
+  tajuk: string;
+  penyedia: string;
+  url: string;
+}
