@@ -16,7 +16,8 @@ import {
   Palette,
   FileDown,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Zap
 } from 'lucide-react';
 
 const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby6SLD1JtNU63UeIdWkUQBtiyz-lx38_8cIRYE6orP5Rm6m_PcxPpHTZhObyW3QqGvaWw/exec"; 
@@ -50,21 +51,73 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : INITIAL_REPORT_DATA;
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAIThinking, setIsAIThinking] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   
-  // State untuk Arkib Pusat
   const [archive, setArchive] = useState<ArchiveItem[]>([]);
   const [isLoadingArchive, setIsLoadingArchive] = useState(false);
 
-  // FUNGSI UTAMA: Tarik data dari Google Sheet (Database Pusat)
+  // --- FUNGSI AI SMART SUGGEST (REPAIRED) ---
+  const handleGenerateAI = async () => {
+    if (!reportData.tajuk) {
+      alert("Sila isi Tajuk Program terlebih dahulu!");
+      return;
+    }
+
+    let key = localStorage.getItem("GEMINI_API_KEY");
+    if (!key) {
+      key = prompt("Sila masukkan API KEY Gemini anda (Sekali sahaja):");
+      if (key) {
+        localStorage.setItem("GEMINI_API_KEY", key);
+      } else return;
+    }
+
+    setIsAIThinking(true);
+
+    try {
+      const response = await fetch(GAS_WEBAPP_URL, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify({
+          action: "generateAI",
+          tajuk: reportData.tajuk,
+          apiKey: key
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.error) throw new Error(result.error);
+
+      if (result.candidates && result.candidates[0]) {
+        const fullText = result.candidates[0].content.parts[0].text;
+        
+        // Split data secara selamat
+        const objPart = fullText.split("[IMPAK]")[0].replace("[OBJEKTIF]", "").trim();
+        const impakPart = fullText.split("[IMPAK]")[1]?.trim() || "";
+
+        updateReportData({
+          objektif: objPart,
+          impak: impakPart
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Ralat AI: " + err.message);
+    } finally {
+      setIsAIThinking(false);
+    }
+  };
+
   const fetchCentralArchive = useCallback(async () => {
     setIsLoadingArchive(true);
     try {
       const response = await fetch(`${GAS_WEBAPP_URL}?action=getArkib`);
       const data = await response.json();
       if (Array.isArray(data)) {
-        // Map data dari Sheet ke format ArchiveItem
         const formattedData: ArchiveItem[] = data.map((item: any, index: number) => ({
           id: index.toString(),
           tajuk: item.tajuk,
@@ -81,12 +134,10 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Simpan draf ke localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(reportData));
   }, [reportData]);
 
-  // Muat turun arkib secara automatik bila aplikasi dibuka
   useEffect(() => {
     fetchCentralArchive();
   }, [fetchCentralArchive]);
@@ -127,33 +178,27 @@ const App: React.FC = () => {
     try {
       const response = await fetch(GAS_WEBAPP_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8', 
-        },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(reportData),
       });
 
       const result = await response.json();
       
       if (result.status === "success") {
-        // Refresh arkib pusat selepas berjaya jana PDF
         await fetchCentralArchive();
-        
         setTimeout(() => {
           setIsAnimating(false);
           setShowSuccess(true);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }, 2000);
-
         const savedLogo = reportData.logo;
         setReportData({ ...INITIAL_REPORT_DATA, logo: savedLogo });
       } else {
         throw new Error(result.message || "Gagal menjana PDF.");
       }
     } catch (err: any) {
-      console.error(err);
       setIsAnimating(false);
-      alert(err.message || "Ralat sambungan. Sila pastikan Web App URL di Google Apps Script telah di-deploy dengan akses 'Anyone'.");
+      alert(err.message || "Ralat sambungan.");
     } finally {
       setIsSubmitting(false);
     }
@@ -195,12 +240,40 @@ const App: React.FC = () => {
               <div className="w-32 h-32 flex items-center justify-center bg-gray-50 rounded-2xl text-gray-300 text-[11px] font-black uppercase text-center p-4">Muat Naik Logo</div>
             )}
           </div>
-          <h1 className="text-5xl md:text-6xl font-black tracking-tighter mb-3 drop-shadow-2xl">
+          <h1 className="text-5xl md:text-6xl font-black tracking-tighter mb-3 drop-shadow-2xl uppercase">
             SSEMJ ONE PAGE REPORT
           </h1>
           <p className="text-sm md:text-base font-bold text-white/90 uppercase tracking-[0.35em] bg-black/20 inline-block px-8 py-2.5 rounded-full backdrop-blur-lg border border-white/10 shadow-xl">
             SISTEM PELAPORAN DIGITAL PANTAS DAN EFISIEN
           </p>
+
+          {/* BUTANG AI SMART SUGGEST - POWER VERSION */}
+          {view === 'form' && (
+            <div className="mt-8 flex justify-center">
+              <button
+                onClick={handleGenerateAI}
+                disabled={isAIThinking || isSubmitting}
+                className={`group relative overflow-hidden px-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-[0.25em] transition-all duration-500 shadow-2xl ${
+                  isAIThinking 
+                    ? "animate-shimmer text-white scale-95 cursor-wait" 
+                    : "bg-white text-indigo-600 hover:bg-indigo-600 hover:text-white border-b-4 border-gray-200 hover:border-indigo-800"
+                }`}
+              >
+                {isAIThinking ? (
+                  <div className="flex items-center gap-3">
+                    <Loader2 size={20} className="animate-spin" />
+                    <span className="animate-pulse">AI Sedang Merancang...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <Zap size={20} className="text-yellow-400 group-hover:fill-yellow-400" />
+                    <span>✨ AI SMART SUGGEST</span>
+                    <span className="absolute top-2 right-2 h-2 w-2 bg-yellow-400 rounded-full animate-ping"></span>
+                  </div>
+                )}
+              </button>
+            </div>
+          )}
         </header>
 
         <nav className="flex flex-col sm:flex-row justify-center items-center gap-5 mb-10">
@@ -217,7 +290,7 @@ const App: React.FC = () => {
               onClick={() => { 
                 setView('archive'); 
                 setShowSuccess(false);
-                fetchCentralArchive(); // Refresh data bila klik tab arkib
+                fetchCentralArchive();
               }}
               className={`flex items-center gap-3 px-10 py-4 rounded-[1.5rem] font-black transition-all uppercase tracking-widest text-xs ${
                 view === 'archive' ? 'bg-white text-gray-900 shadow-2xl scale-105' : 'text-white hover:bg-white/10'
@@ -237,21 +310,18 @@ const App: React.FC = () => {
         </nav>
 
         {showSuccess && (
-          <div className="mb-10 animate-in zoom-in slide-in-from-top-12 duration-1000 bg-white/95 backdrop-blur-2xl p-10 rounded-[3.5rem] border-4 border-green-500 shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-green-500/10 rounded-full -translate-y-20 translate-x-20 blur-3xl"></div>
-            <div className="flex flex-col sm:flex-row items-center gap-8 relative z-10">
-              <div className="bg-green-500 p-7 rounded-[2rem] text-white shadow-2xl rotate-6 group-hover:rotate-0 transition-all duration-700 scale-110">
+          <div className="mb-10 animate-in zoom-in duration-700 bg-white/95 backdrop-blur-2xl p-10 rounded-[3.5rem] border-4 border-green-500 shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative">
+            <div className="flex flex-col sm:flex-row items-center gap-8">
+              <div className="bg-green-500 p-7 rounded-[2rem] text-white shadow-2xl scale-110">
                 <CheckCircle2 size={48} />
               </div>
               <div className="text-center sm:text-left flex-1">
-                <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tighter leading-none">TAHNIAH, OPR ANDA SIAP DIJANA!</h3>
-                <p className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.25em] mt-3 leading-relaxed max-w-md">
-                  LAPORAN TELAH DIARKIBKAN KE GOOGLE DRIVE. PERGI KE ARKIB UNTUK MUAT TURUN FAIL PDF ANDA.
-                </p>
+                <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">TAHNIAH, OPR SIAP DIJANA!</h3>
+                <p className="text-[11px] font-bold text-gray-500 uppercase mt-2">FAIL TELAH DISIMPAN KE DRIVE & ARKIB PUSAT.</p>
               </div>
               <button 
                 onClick={() => { setView('archive'); setShowSuccess(false); fetchCentralArchive(); }}
-                className="w-full sm:w-auto px-10 py-5 bg-indigo-600 text-white font-black text-xs uppercase tracking-[0.25em] rounded-2xl hover:bg-indigo-700 hover:scale-105 transition-all shadow-2xl active:scale-95 border-b-4 border-indigo-900"
+                className="px-10 py-5 bg-indigo-600 text-white font-black text-xs uppercase rounded-2xl hover:bg-indigo-700 shadow-2xl"
               >
                 Ke Arkib Digital
               </button>
@@ -259,7 +329,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <main className="animate-in fade-in slide-in-from-bottom-12 duration-1000">
+        <main>
           {view === 'form' ? (
             <ReportForm 
               data={reportData} 
@@ -268,70 +338,44 @@ const App: React.FC = () => {
               isSubmitting={isSubmitting}
             />
           ) : (
-            <div className="bg-white/95 backdrop-blur-2xl p-8 md:p-14 rounded-[3.5rem] shadow-[0_50px_100px_rgba(0,0,0,0.2)] border border-white/50">
+            <div className="bg-white/95 backdrop-blur-2xl p-8 md:p-14 rounded-[3.5rem] shadow-2xl border border-white/50">
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6">
-                <h2 className="text-4xl font-black text-gray-900 flex items-center gap-5 tracking-tighter">
-                  <div className="p-4 bg-indigo-600 rounded-3xl text-white shadow-xl shadow-indigo-600/20">
+                <h2 className="text-4xl font-black text-gray-900 flex items-center gap-5 tracking-tighter uppercase">
+                  <div className="p-4 bg-indigo-600 rounded-3xl text-white">
                     <Archive size={32} />
                   </div>
                   ARKIB DIGITAL OPR
                 </h2>
                 <div className="flex items-center gap-4">
-                  <button 
-                    onClick={fetchCentralArchive}
-                    disabled={isLoadingArchive}
-                    className="p-3 bg-gray-100 hover:bg-gray-200 rounded-2xl text-gray-600 transition-all disabled:opacity-50"
-                    title="Refresh Arkib"
-                  >
+                  <button onClick={fetchCentralArchive} disabled={isLoadingArchive} className="p-3 bg-gray-100 hover:bg-gray-200 rounded-2xl">
                     <RefreshCw size={20} className={isLoadingArchive ? "animate-spin" : ""} />
                   </button>
-                  <div className="bg-gray-100 px-6 py-3 rounded-2xl border border-gray-200">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">JUMLAH REKOD: </span>
-                    <span className="text-indigo-600 font-black text-lg">{archive.length}</span>
+                  <div className="bg-gray-100 px-6 py-3 rounded-2xl">
+                    <span className="text-indigo-600 font-black text-lg">{archive.length} REKOD</span>
                   </div>
                 </div>
               </div>
               
               {isLoadingArchive ? (
-                <div className="text-center py-28 text-gray-400">
+                <div className="text-center py-20 text-gray-400">
                   <Loader2 size={44} className="animate-spin mx-auto mb-4 text-indigo-600" />
-                  <p className="font-black uppercase tracking-[0.3em] text-xs">Menarik data dari Arkib Pusat...</p>
-                </div>
-              ) : archive.length === 0 ? (
-                <div className="text-center py-28 text-gray-400 bg-gray-50/50 rounded-[3rem] border-2 border-dashed border-gray-100">
-                  <div className="bg-white w-28 h-28 rounded-full flex items-center justify-center mx-auto mb-8 shadow-xl">
-                    <Info size={44} className="opacity-10" />
-                  </div>
-                  <p className="font-black uppercase tracking-[0.3em] text-xs">Tiada rekod laporan ditemui dlm pangkalan data.</p>
-                  <button onClick={() => setView('form')} className="mt-8 text-indigo-600 font-black text-[10px] uppercase tracking-widest hover:underline">Mulakan Laporan Pertama Anda</button>
+                  <p className="font-black uppercase text-xs">Menyambung ke Pangkalan Data...</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-6">
                   {archive.map(item => (
-                    <div key={item.id} className="flex flex-col sm:flex-row items-center justify-between p-7 bg-white border border-gray-100 rounded-[3rem] hover:shadow-[0_25px_60px_rgba(0,0,0,0.1)] transition-all group gap-5 ring-1 ring-gray-200/50 hover:-translate-y-1">
+                    <div key={item.id} className="flex flex-col sm:flex-row items-center justify-between p-7 bg-white border border-gray-100 rounded-[3rem] hover:shadow-xl transition-all group gap-5">
                       <div className="flex items-center gap-6 w-full">
-                        <div className={`w-20 h-20 rounded-[2rem] flex items-center justify-center text-white font-black shadow-2xl shrink-0 group-hover:scale-110 transition-transform duration-500 bg-gradient-to-br ${BIDANG_THEMES[item.bidang]}`}>
+                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg bg-gradient-to-br ${BIDANG_THEMES[item.bidang]}`}>
                           {getBidangIcon(item.bidang)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className="text-[10px] font-black text-gray-400 bg-gray-50 px-3 py-1 rounded-full uppercase tracking-widest border border-gray-100">{item.date}</span>
-                            <span className="w-1.5 h-1.5 bg-gray-200 rounded-full"></span>
-                            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{item.bidang}</span>
-                          </div>
-                          <h4 className="text-xl font-black text-gray-900 uppercase tracking-tight group-hover:text-indigo-600 transition-colors truncate pr-6">
-                             {item.tajuk}
-                          </h4>
+                          <p className="text-[10px] font-black text-indigo-600 uppercase mb-1">{item.date} • {item.bidang}</p>
+                          <h4 className="text-xl font-black text-gray-900 uppercase truncate">{item.tajuk}</h4>
                         </div>
                       </div>
-                      <a 
-                        href={item.driveLink} 
-                        target="_blank" 
-                        rel="noreferrer" 
-                        className="w-full sm:w-auto inline-flex items-center justify-center gap-4 px-10 py-5 bg-gray-900 text-white rounded-2xl hover:bg-indigo-600 transition-all font-black text-[11px] uppercase tracking-widest shadow-2xl group/btn active:scale-95 border-b-4 border-gray-950 hover:border-indigo-800"
-                      >
-                        <FileDown size={18} className="group-hover/btn:translate-y-0.5 transition-transform" />
-                        MUAT TURUN PDF
+                      <a href={item.driveLink} target="_blank" rel="noreferrer" className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 bg-gray-900 text-white rounded-2xl hover:bg-indigo-600 transition-all font-black text-[11px] uppercase">
+                        <FileDown size={18} /> MUAT TURUN PDF
                       </a>
                     </div>
                   ))}
@@ -342,7 +386,7 @@ const App: React.FC = () => {
         </main>
 
         <footer className="mt-20 text-center text-white/40 text-[10px] font-black uppercase tracking-[0.5em] pb-12">
-          &copy; 2026 SEKOLAH SENI MALAYSIA JOHOR • V24.17 DZURRI
+          &copy; 2026 SEKOLAH SENI MALAYSIA JOHOR • V24.23.AI DZURRI
         </footer>
       </div>
       
@@ -353,8 +397,15 @@ const App: React.FC = () => {
           60% { width: 50%; margin-left: 50%; }
           100% { width: 0%; margin-left: 100%; }
         }
-        .animate-progress-flow {
-          animation: progress-flow 2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+        .animate-progress-flow { animation: progress-flow 2s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .animate-shimmer {
+          background: linear-gradient(90deg, #4f46e5, #9333ea, #4f46e5);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
         }
       `}</style>
     </div>
