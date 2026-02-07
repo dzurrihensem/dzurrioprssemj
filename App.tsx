@@ -19,6 +19,7 @@ import {
   Zap
 } from 'lucide-react';
 
+// PASTIKAN URL INI ADALAH URL DEPLOYMENT TERKINI DARI APPS SCRIPT CIKGU
 const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyhYbYu-SX8ZNbH21b_aqYYlMO4nl5VPVxYu_Ls7zmyX7uZDCiKkUD_H19eGp3u2HPgUA/exec"; 
 const STORAGE_KEY = "ssemj_opr_draft";
 
@@ -56,7 +57,7 @@ const App: React.FC = () => {
   const [archive, setArchive] = useState<ArchiveItem[]>([]);
   const [isLoadingArchive, setIsLoadingArchive] = useState(false);
 
-  // --- FUNGSI AI SMART SUGGEST (VIA PROXY GAS) ---
+  // --- FUNGSI AI SMART SUGGEST (OPTIMIZED FOR DEEPSEEK VIA GAS) ---
   const handleGenerateAI = async () => {
     if (!reportData.tajuk) {
       alert("Sila isi Tajuk Program terlebih dahulu!");
@@ -65,7 +66,7 @@ const App: React.FC = () => {
 
     let key = localStorage.getItem("DEEPSEEK_API_KEY");
     if (!key) {
-      key = prompt("Sila masukkan API KEY DeepSeek anda (platform.deepseek.com):");
+      key = prompt("Sila masukkan API KEY DeepSeek anda:");
       if (key) {
         localStorage.setItem("DEEPSEEK_API_KEY", key);
       } else return;
@@ -74,7 +75,6 @@ const App: React.FC = () => {
     setIsAIThinking(true);
 
     try {
-      // Kita hantar arahan 'generateAI' ke GAS cikgu
       const response = await fetch(GAS_WEBAPP_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -85,18 +85,32 @@ const App: React.FC = () => {
         })
       });
 
-      const result = await response.json();
+      // KITA AMBIL SEBAGAI TEKS DAHULU UNTUK MENGELAK [object Object]
+      const rawText = await response.text();
+      let result;
+      
+      try {
+        result = JSON.parse(rawText);
+      } catch (e) {
+        throw new Error("Respon server bermasalah. Sila pastikan Apps Script anda di-deploy sebagai 'New Version'.");
+      }
       
       if (result.error) {
-        throw new Error(result.error || "Ralat pada API Key.");
+        // Jika ralat baki kredit atau API Key
+        localStorage.removeItem("DEEPSEEK_API_KEY");
+        const errorMsg = typeof result.error === 'object' ? JSON.stringify(result.error) : result.error;
+        throw new Error(errorMsg);
       }
 
-      // DeepSeek/OpenAI format: result.choices[0].message.content
+      // MEMBACA RESPON DEEPSEEK (choices[0].message.content)
+      let aiContent = "";
       if (result.choices && result.choices[0]?.message?.content) {
-        const fullText = result.choices[0].message.content;
-        
-        // Pecahkan teks berdasarkan tag [OBJEKTIF] dan [IMPAK]
-        const parts = fullText.split(/\[IMPAK\]/i);
+        aiContent = result.choices[0].message.content;
+      }
+
+      if (aiContent) {
+        // Logik pecah teks [OBJEKTIF] & [IMPAK]
+        const parts = aiContent.split(/\[IMPAK\]/i);
         const objText = parts[0].replace(/\[OBJEKTIF\]/i, "").trim();
         const impakText = parts[1] ? parts[1].trim() : "";
 
@@ -105,15 +119,11 @@ const App: React.FC = () => {
           impak: impakText
         });
       } else {
-        throw new Error("AI memulangkan format yang salah atau kredit anda habis.");
+        throw new Error("AI tidak memulangkan teks. Sila semak baki kredit DeepSeek anda.");
       }
     } catch (err: any) {
-      console.error(err);
+      console.error("Detail Ralat:", err);
       alert("RALAT AI: " + err.message);
-      // Jika ralat, beri peluang user tukar key
-      if (err.message.includes("key") || err.message.includes("401")) {
-        localStorage.removeItem("DEEPSEEK_API_KEY");
-      }
     } finally {
       setIsAIThinking(false);
     }
@@ -135,7 +145,7 @@ const App: React.FC = () => {
         setArchive(formattedData);
       }
     } catch (error) {
-      console.error("Gagal menarik arkib pusat:", error);
+      console.error("Gagal menarik arkib:", error);
     } finally {
       setIsLoadingArchive(false);
     }
@@ -156,7 +166,7 @@ const App: React.FC = () => {
   };
 
   const handleReset = () => {
-    if (window.confirm("Adakah anda pasti untuk memadam draf ini?")) {
+    if (window.confirm("Adakah anda pasti untuk memadam draf?")) {
       setReportData(INITIAL_REPORT_DATA);
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem("DEEPSEEK_API_KEY");
@@ -176,7 +186,7 @@ const App: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!reportData.tajuk || !reportData.reporterName || reportData.images.length === 0 || !reportData.logo) {
-      alert("Sila lengkapkan maklumat wajib.");
+      alert("Sila lengkapkan maklumat wajib (Tajuk, Nama, Logo & Gambar).");
       return;
     }
 
@@ -217,7 +227,7 @@ const App: React.FC = () => {
       
       {isAnimating && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-2xl">
-          <div className="bg-white p-14 rounded-[3.5rem] shadow-2xl text-center space-y-8 max-w-sm w-full mx-4 border-b-8 border-indigo-600">
+          <div className="bg-white p-14 rounded-[3.5rem] shadow-2xl text-center space-y-8 max-w-sm w-full mx-4 border-b-8 border-indigo-600 animate-in zoom-in-95">
              <div className="relative w-32 h-32 mx-auto">
                 <div className="absolute inset-0 bg-indigo-500/30 rounded-full animate-ping"></div>
                 <div className="relative bg-gradient-to-br from-indigo-500 to-indigo-700 w-32 h-32 rounded-full flex items-center justify-center text-white shadow-2xl">
@@ -229,19 +239,19 @@ const App: React.FC = () => {
              </div>
              <div className="space-y-2">
                <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter">Memproses OPR</h2>
-               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.3em]">SEDANG MENYUSUN PDF ANDA</p>
+               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.3em]">DZURRI ENGINE SEDANG MENYUSUN PDF</p>
              </div>
           </div>
         </div>
       )}
 
-      <div className="max-w-5xl mx-auto px-4 py-12 text-white">
-        <header className="text-center mb-12">
+      <div className="max-w-5xl mx-auto px-4 py-12">
+        <header className="text-center mb-12 text-white">
           <div className="inline-block p-6 bg-white rounded-[3rem] mb-6 shadow-2xl border-4 border-white/40">
             {reportData.logo ? (
               <img src={reportData.logo} className="w-32 h-32 object-contain" alt="Logo" />
             ) : (
-              <div className="w-32 h-32 flex items-center justify-center bg-gray-50 rounded-2xl text-gray-300 text-[10px] font-black uppercase p-4 text-center">MUAT NAIK LOGO</div>
+              <div className="w-32 h-32 flex items-center justify-center bg-gray-50 rounded-2xl text-gray-300 text-[10px] font-black uppercase p-4 text-center">Logo SSEMJ</div>
             )}
           </div>
           <h1 className="text-5xl md:text-6xl font-black tracking-tighter mb-3 uppercase">SSEMJ ONE PAGE REPORT</h1>
@@ -257,7 +267,7 @@ const App: React.FC = () => {
                 }`}
               >
                 {isAIThinking ? (
-                  <><Loader2 size={20} className="animate-spin" /><span>DEEPSEEK SEDANG MENULIS...</span></>
+                  <><Loader2 size={20} className="animate-spin" /><span>DEEPSEEK MENULIS...</span></>
                 ) : (
                   <><Zap size={20} className="text-yellow-400" /><span>✨ DEEPSEEK SMART SUGGEST</span></>
                 )}
@@ -270,15 +280,15 @@ const App: React.FC = () => {
           <div className="flex gap-4 p-2 bg-black/10 backdrop-blur-md rounded-[2rem] border border-white/10 shadow-lg">
             <button
               onClick={() => setView('form')}
-              className={`px-10 py-4 rounded-[1.5rem] font-black uppercase text-xs ${view === 'form' ? 'bg-white text-gray-900 shadow-xl' : 'text-white'}`}
+              className={`px-10 py-4 rounded-[1.5rem] font-black uppercase tracking-widest text-xs ${view === 'form' ? 'bg-white text-gray-900 shadow-2xl' : 'text-white'}`}
             >
-              Editor
+              Editor Laporan
             </button>
             <button
               onClick={() => { setView('archive'); fetchCentralArchive(); }}
-              className={`px-10 py-4 rounded-[1.5rem] font-black uppercase text-xs ${view === 'archive' ? 'bg-white text-gray-900 shadow-xl' : 'text-white'}`}
+              className={`px-10 py-4 rounded-[1.5rem] font-black uppercase tracking-widest text-xs ${view === 'archive' ? 'bg-white text-gray-900 shadow-2xl' : 'text-white'}`}
             >
-              Arkib
+              Arkib Digital
             </button>
           </div>
           {view === 'form' && (
@@ -291,17 +301,28 @@ const App: React.FC = () => {
           )}
         </nav>
 
+        {showSuccess && (
+          <div className="mb-10 bg-white/95 p-10 rounded-[3.5rem] border-4 border-green-500 shadow-2xl animate-in zoom-in flex flex-col sm:flex-row items-center gap-8">
+              <div className="bg-green-500 p-7 rounded-[2rem] text-white shadow-xl"><CheckCircle2 size={48} /></div>
+              <div className="text-center sm:text-left flex-1 text-gray-900">
+                <h3 className="text-2xl font-black uppercase tracking-tighter">OPR SIAP DIJANA!</h3>
+                <p className="text-[11px] font-bold text-gray-500 uppercase mt-2">Fail disimpan ke Drive & Arkib Pusat.</p>
+              </div>
+              <button onClick={() => { setView('archive'); setShowSuccess(false); }} className="px-10 py-5 bg-indigo-600 text-white font-black text-xs uppercase rounded-2xl shadow-xl">Ke Arkib</button>
+          </div>
+        )}
+
         <main>
           {view === 'form' ? (
             <ReportForm data={reportData} onChange={updateReportData} onSubmit={handleSubmit} isSubmitting={isSubmitting} />
           ) : (
             <div className="bg-white/95 p-8 md:p-14 rounded-[3.5rem] shadow-2xl text-gray-900">
                <div className="flex flex-col md:flex-row justify-between mb-12 gap-6">
-                <h2 className="text-4xl font-black text-gray-900 flex items-center gap-5 uppercase tracking-tighter">
+                <h2 className="text-4xl font-black flex items-center gap-5 tracking-tighter uppercase">
                   <div className="p-4 bg-indigo-600 rounded-3xl text-white"><Archive size={32} /></div>
                   ARKIB DIGITAL
                 </h2>
-                <button onClick={fetchCentralArchive} disabled={isLoadingArchive} className="p-3 bg-gray-100 hover:bg-gray-200 rounded-2xl">
+                <button onClick={fetchCentralArchive} disabled={isLoadingArchive} className="p-3 bg-gray-100 hover:bg-gray-200 rounded-2xl text-gray-900">
                   <RefreshCw size={20} className={isLoadingArchive ? "animate-spin" : ""} />
                 </button>
               </div>
@@ -324,7 +345,7 @@ const App: React.FC = () => {
         </main>
 
         <footer className="mt-20 text-center text-white/40 text-[10px] font-black uppercase tracking-[0.5em] pb-12">
-          &copy; 2026 SEKOLAH SENI MALAYSIA JOHOR • V24.23.AI DZURRI
+          &copy; 2026 SEKOLAH SENI MALAYSIA JOHOR • DZURRI AI
         </footer>
       </div>
     </div>
