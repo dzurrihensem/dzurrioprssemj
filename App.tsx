@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Bidang, ReportData, ArchiveItem } from './types';
 import { BIDANG_THEMES } from './constants';
 import ReportForm from './components/ReportForm';
@@ -16,7 +15,8 @@ import {
   Trophy, 
   Palette,
   FileDown,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 
 const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzAJqWreL7bLvCHS3ljpDsd0rKQJ3xfzRajZqDn8HwBVQd3l-ERaJI0uyFutsC181pmYw/exec"; 
@@ -52,11 +52,44 @@ const App: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  
+  // State untuk Arkib Pusat
   const [archive, setArchive] = useState<ArchiveItem[]>([]);
+  const [isLoadingArchive, setIsLoadingArchive] = useState(false);
 
+  // FUNGSI UTAMA: Tarik data dari Google Sheet (Database Pusat)
+  const fetchCentralArchive = useCallback(async () => {
+    setIsLoadingArchive(true);
+    try {
+      const response = await fetch(`${GAS_WEBAPP_URL}?action=getArkib`);
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        // Map data dari Sheet ke format ArchiveItem
+        const formattedData: ArchiveItem[] = data.map((item: any, index: number) => ({
+          id: index.toString(),
+          tajuk: item.tajuk,
+          bidang: item.bidang as Bidang,
+          date: new Date(item.tarikh).toLocaleDateString('ms-MY'),
+          driveLink: item.url
+        }));
+        setArchive(formattedData);
+      }
+    } catch (error) {
+      console.error("Gagal menarik arkib pusat:", error);
+    } finally {
+      setIsLoadingArchive(false);
+    }
+  }, []);
+
+  // Simpan draf ke localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(reportData));
   }, [reportData]);
+
+  // Muat turun arkib secara automatik bila aplikasi dibuka
+  useEffect(() => {
+    fetchCentralArchive();
+  }, [fetchCentralArchive]);
 
   const currentTheme = BIDANG_THEMES[reportData.bidang];
 
@@ -103,15 +136,8 @@ const App: React.FC = () => {
       const result = await response.json();
       
       if (result.status === "success") {
-        const newArchiveItem: ArchiveItem = {
-          id: Math.random().toString(36).substr(2, 9),
-          tajuk: reportData.tajuk,
-          bidang: reportData.bidang,
-          date: reportData.startDate,
-          driveLink: result.fileUrl,
-        };
-        
-        setArchive(prev => [newArchiveItem, ...prev]);
+        // Refresh arkib pusat selepas berjaya jana PDF
+        await fetchCentralArchive();
         
         setTimeout(() => {
           setIsAnimating(false);
@@ -132,8 +158,6 @@ const App: React.FC = () => {
       setIsSubmitting(false);
     }
   };
-
-  const sortedArchive = [...archive].sort((a, b) => a.bidang.localeCompare(b.bidang));
 
   return (
     <div className={`min-h-screen transition-all duration-1000 bg-gradient-to-br ${currentTheme}`}>
@@ -190,7 +214,11 @@ const App: React.FC = () => {
               <FileText size={18} /> Editor Laporan
             </button>
             <button
-              onClick={() => { setView('archive'); setShowSuccess(false); }}
+              onClick={() => { 
+                setView('archive'); 
+                setShowSuccess(false);
+                fetchCentralArchive(); // Refresh data bila klik tab arkib
+              }}
               className={`flex items-center gap-3 px-10 py-4 rounded-[1.5rem] font-black transition-all uppercase tracking-widest text-xs ${
                 view === 'archive' ? 'bg-white text-gray-900 shadow-2xl scale-105' : 'text-white hover:bg-white/10'
               }`}
@@ -222,7 +250,7 @@ const App: React.FC = () => {
                 </p>
               </div>
               <button 
-                onClick={() => { setView('archive'); setShowSuccess(false); }}
+                onClick={() => { setView('archive'); setShowSuccess(false); fetchCentralArchive(); }}
                 className="w-full sm:w-auto px-10 py-5 bg-indigo-600 text-white font-black text-xs uppercase tracking-[0.25em] rounded-2xl hover:bg-indigo-700 hover:scale-105 transition-all shadow-2xl active:scale-95 border-b-4 border-indigo-900"
               >
                 Ke Arkib Digital
@@ -248,23 +276,38 @@ const App: React.FC = () => {
                   </div>
                   ARKIB DIGITAL OPR
                 </h2>
-                <div className="bg-gray-100 px-6 py-3 rounded-2xl border border-gray-200">
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">JUMLAH REKOD: </span>
-                  <span className="text-indigo-600 font-black text-lg">{archive.length}</span>
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={fetchCentralArchive}
+                    disabled={isLoadingArchive}
+                    className="p-3 bg-gray-100 hover:bg-gray-200 rounded-2xl text-gray-600 transition-all disabled:opacity-50"
+                    title="Refresh Arkib"
+                  >
+                    <RefreshCw size={20} className={isLoadingArchive ? "animate-spin" : ""} />
+                  </button>
+                  <div className="bg-gray-100 px-6 py-3 rounded-2xl border border-gray-200">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">JUMLAH REKOD: </span>
+                    <span className="text-indigo-600 font-black text-lg">{archive.length}</span>
+                  </div>
                 </div>
               </div>
               
-              {sortedArchive.length === 0 ? (
+              {isLoadingArchive ? (
+                <div className="text-center py-28 text-gray-400">
+                  <Loader2 size={44} className="animate-spin mx-auto mb-4 text-indigo-600" />
+                  <p className="font-black uppercase tracking-[0.3em] text-xs">Menarik data dari Arkib Pusat...</p>
+                </div>
+              ) : archive.length === 0 ? (
                 <div className="text-center py-28 text-gray-400 bg-gray-50/50 rounded-[3rem] border-2 border-dashed border-gray-100">
                   <div className="bg-white w-28 h-28 rounded-full flex items-center justify-center mx-auto mb-8 shadow-xl">
                     <Info size={44} className="opacity-10" />
                   </div>
-                  <p className="font-black uppercase tracking-[0.3em] text-xs">Tiada rekod laporan ditemui.</p>
+                  <p className="font-black uppercase tracking-[0.3em] text-xs">Tiada rekod laporan ditemui dlm pangkalan data.</p>
                   <button onClick={() => setView('form')} className="mt-8 text-indigo-600 font-black text-[10px] uppercase tracking-widest hover:underline">Mulakan Laporan Pertama Anda</button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-6">
-                  {sortedArchive.map(item => (
+                  {archive.map(item => (
                     <div key={item.id} className="flex flex-col sm:flex-row items-center justify-between p-7 bg-white border border-gray-100 rounded-[3rem] hover:shadow-[0_25px_60px_rgba(0,0,0,0.1)] transition-all group gap-5 ring-1 ring-gray-200/50 hover:-translate-y-1">
                       <div className="flex items-center gap-6 w-full">
                         <div className={`w-20 h-20 rounded-[2rem] flex items-center justify-center text-white font-black shadow-2xl shrink-0 group-hover:scale-110 transition-transform duration-500 bg-gradient-to-br ${BIDANG_THEMES[item.bidang]}`}>
@@ -299,7 +342,7 @@ const App: React.FC = () => {
         </main>
 
         <footer className="mt-20 text-center text-white/40 text-[10px] font-black uppercase tracking-[0.5em] pb-12">
-          &copy; 2026 SEKOLAH SENI MALAYSIA JOHOR • V24.16 DZURRI
+          &copy; 2026 SEKOLAH SENI MALAYSIA JOHOR • V24.17 DZURRI
         </footer>
       </div>
       
