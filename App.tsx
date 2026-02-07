@@ -58,16 +58,17 @@ const App: React.FC = () => {
   const [archive, setArchive] = useState<ArchiveItem[]>([]);
   const [isLoadingArchive, setIsLoadingArchive] = useState(false);
 
-  // --- FUNGSI AI SMART SUGGEST (MODAL V1 STABLE) ---
+  // --- FUNGSI AI SMART SUGGEST (V1BETA STABLE) ---
   const handleGenerateAI = async () => {
     if (!reportData.tajuk) {
       alert("Sila isi Tajuk Program terlebih dahulu!");
       return;
     }
 
+    // Pastikan kita ambil key yang segar
     let key = localStorage.getItem("GEMINI_API_KEY");
     if (!key) {
-      key = prompt("Sila masukkan API KEY Gemini anda:");
+      key = prompt("Sila masukkan API KEY Gemini baharu (Guna akaun personal):");
       if (key) {
         localStorage.setItem("GEMINI_API_KEY", key);
       } else return;
@@ -76,8 +77,8 @@ const App: React.FC = () => {
     setIsAIThinking(true);
 
     try {
-      // Menggunakan Endpoint v1 dan model gemini-1.5-flash (versi paling stabil)
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${key}`, {
+      // MENGGUNAKAN V1BETA SEPERTI YANG DIMINTA (PALING SERASI DENGAN FLASH)
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -93,16 +94,16 @@ const App: React.FC = () => {
 
       const result = await response.json();
       
+      // Jika ralat berlaku, buang key supaya user boleh reset
       if (result.error) {
-        // Jika ralat (Model Not Found / Invalid Key), buang key supaya user boleh reset
         localStorage.removeItem("GEMINI_API_KEY");
-        throw new Error(result.error.message || "Model tidak dijumpai.");
+        throw new Error(result.error.message || "Ralat pada API Key.");
       }
 
       if (result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
         const fullText = result.candidates[0].content.parts[0].text;
         
-        // Memecah teks secara selamat menggunakan regex
+        // Logik pecah teks secara selamat
         const parts = fullText.split(/\[IMPAK\]/i);
         const objText = parts[0].replace(/\[OBJEKTIF\]/i, "").trim();
         const impakText = parts[1] ? parts[1].trim() : "";
@@ -162,6 +163,7 @@ const App: React.FC = () => {
     if (window.confirm("Adakah anda pasti untuk memadam draf ini dan memulakan borang baru?")) {
       setReportData(INITIAL_REPORT_DATA);
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem("GEMINI_API_KEY"); // Cuci sekali API Key bila reset
     }
   };
 
