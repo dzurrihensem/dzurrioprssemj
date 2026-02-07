@@ -58,17 +58,16 @@ const App: React.FC = () => {
   const [archive, setArchive] = useState<ArchiveItem[]>([]);
   const [isLoadingArchive, setIsLoadingArchive] = useState(false);
 
-  // --- FUNGSI AI SMART SUGGEST (V1BETA STABLE) ---
+  // --- FUNGSI AI SMART SUGGEST (MODAL PRO - PALING STABIL) ---
   const handleGenerateAI = async () => {
     if (!reportData.tajuk) {
       alert("Sila isi Tajuk Program terlebih dahulu!");
       return;
     }
 
-    // Pastikan kita ambil key yang segar
     let key = localStorage.getItem("GEMINI_API_KEY");
     if (!key) {
-      key = prompt("Sila masukkan API KEY Gemini baharu (Guna akaun personal):");
+      key = prompt("Sila masukkan API KEY Gemini baharu (Guna akaun personal @gmail):");
       if (key) {
         localStorage.setItem("GEMINI_API_KEY", key);
       } else return;
@@ -77,8 +76,8 @@ const App: React.FC = () => {
     setIsAIThinking(true);
 
     try {
-      // MENGGUNAKAN V1BETA SEPERTI YANG DIMINTA (PALING SERASI DENGAN FLASH)
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+      // TUKAR KEPADA GEMINI-PRO (MODEL PALING 'KEBAL' RALAT)
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${key}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -94,16 +93,14 @@ const App: React.FC = () => {
 
       const result = await response.json();
       
-      // Jika ralat berlaku, buang key supaya user boleh reset
       if (result.error) {
+        // Jika ralat, kita buang key supaya user boleh reset guna key lain
         localStorage.removeItem("GEMINI_API_KEY");
-        throw new Error(result.error.message || "Ralat pada API Key.");
+        throw new Error(result.error.message || "Model Pro tidak dijumpai.");
       }
 
       if (result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
         const fullText = result.candidates[0].content.parts[0].text;
-        
-        // Logik pecah teks secara selamat
         const parts = fullText.split(/\[IMPAK\]/i);
         const objText = parts[0].replace(/\[OBJEKTIF\]/i, "").trim();
         const impakText = parts[1] ? parts[1].trim() : "";
@@ -112,8 +109,6 @@ const App: React.FC = () => {
           objektif: objText,
           impak: impakText
         });
-      } else {
-        throw new Error("AI tidak memulangkan respon yang sah.");
       }
     } catch (err: any) {
       console.error(err);
@@ -163,7 +158,7 @@ const App: React.FC = () => {
     if (window.confirm("Adakah anda pasti untuk memadam draf ini dan memulakan borang baru?")) {
       setReportData(INITIAL_REPORT_DATA);
       localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem("GEMINI_API_KEY"); // Cuci sekali API Key bila reset
+      localStorage.removeItem("GEMINI_API_KEY"); // PAKSA BUANG KEY LAMA
     }
   };
 
@@ -219,7 +214,6 @@ const App: React.FC = () => {
   return (
     <div className={`min-h-screen transition-all duration-1000 bg-gradient-to-br ${currentTheme}`}>
       
-      {/* PROCESSING ANIMATION OVERLAY */}
       {isAnimating && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-2xl animate-in fade-in duration-500">
           <div className="bg-white p-14 rounded-[3.5rem] shadow-[0_50px_100px_rgba(0,0,0,0.5)] text-center space-y-8 max-w-sm w-full mx-4 border-b-8 border-indigo-600 animate-in zoom-in-95 scale-110">
@@ -259,7 +253,6 @@ const App: React.FC = () => {
             SISTEM PELAPORAN DIGITAL PANTAS DAN EFISIEN
           </p>
 
-          {/* BUTANG AI SMART SUGGEST - POWER VERSION */}
           {view === 'form' && (
             <div className="mt-8 flex justify-center">
               <button
