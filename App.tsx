@@ -58,7 +58,7 @@ const App: React.FC = () => {
   const [archive, setArchive] = useState<ArchiveItem[]>([]);
   const [isLoadingArchive, setIsLoadingArchive] = useState(false);
 
-  // --- FUNGSI AI SMART SUGGEST (REPAIRED) ---
+  // --- FUNGSI AI SMART SUGGEST (REPAIRED & STABLE) ---
   const handleGenerateAI = async () => {
     if (!reportData.tajuk) {
       alert("Sila isi Tajuk Program terlebih dahulu!");
@@ -92,21 +92,25 @@ const App: React.FC = () => {
       
       if (result.error) throw new Error(result.error);
 
-      if (result.candidates && result.candidates[0]) {
+      // SAFE PARSING: Mencari teks dalam struktur JSON Gemini
+      if (result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
         const fullText = result.candidates[0].content.parts[0].text;
         
-        // Split data secara selamat
-        const objPart = fullText.split("[IMPAK]")[0].replace("[OBJEKTIF]", "").trim();
-        const impakPart = fullText.split("[IMPAK]")[1]?.trim() || "";
+        // Logik pecah teks mengikut tag [IMPAK] tanpa case-sensitive
+        const parts = fullText.split(/\[IMPAK\]/i);
+        const objText = parts[0].replace(/\[OBJEKTIF\]/i, "").trim();
+        const impakText = parts[1] ? parts[1].trim() : "";
 
         updateReportData({
-          objektif: objPart,
-          impak: impakPart
+          objektif: objText,
+          impak: impakText
         });
+      } else {
+        throw new Error("Format data AI tidak dikenali.");
       }
     } catch (err: any) {
       console.error(err);
-      alert("Ralat AI: " + err.message);
+      alert("Ralat AI: Pastikan Deployment Apps Script adalah Versi Terkini (New Version).");
     } finally {
       setIsAIThinking(false);
     }
