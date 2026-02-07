@@ -56,56 +56,62 @@ const App: React.FC = () => {
   const [archive, setArchive] = useState<ArchiveItem[]>([]);
   const [isLoadingArchive, setIsLoadingArchive] = useState(false);
 
-  // --- FUNGSI AI SMART SUGGEST (MODAL PROXY SERVER - STABLE) ---
+  // --- FUNGSI AI SMART SUGGEST (OPENAI CHATGPT VERSION) ---
   const handleGenerateAI = async () => {
     if (!reportData.tajuk) {
       alert("Sila isi Tajuk Program terlebih dahulu!");
       return;
     }
 
-    let key = localStorage.getItem("GEMINI_API_KEY");
+    let key = localStorage.getItem("OPENAI_API_KEY");
     if (!key) {
-      key = prompt("Sila masukkan API KEY Gemini (Guna akaun peribadi @gmail):");
+      key = prompt("Sila masukkan API KEY ChatGPT (OpenAI) anda:");
       if (key) {
-        localStorage.setItem("GEMINI_API_KEY", key);
+        localStorage.setItem("OPENAI_API_KEY", key);
       } else return;
     }
 
     setIsAIThinking(true);
 
     try {
-      // Kita panggil Apps Script, biarkan Apps Script bercakap dengan Google AI
-      const response = await fetch(GAS_WEBAPP_URL, {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${key}`
+        },
         body: JSON.stringify({
-          action: "generateAI",
-          tajuk: reportData.tajuk,
-          apiKey: key
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "user",
+              content: `Berikan 3 objektif dan 2 impak profesional dalam Bahasa Melayu untuk program sekolah bertajuk: ${reportData.tajuk}. Pastikan output dalam format tepat begini tanpa mukadimah: [OBJEKTIF] isi teks objektif [IMPAK] isi teks impak`
+            }
+          ],
+          temperature: 0.7
         })
       });
 
       const result = await response.json();
       
-      // Jika ralat dipulangkan dari Apps Script
       if (result.error) {
-        throw new Error(result.error.message || "Ralat pada API Key atau Model.");
+        localStorage.removeItem("OPENAI_API_KEY");
+        throw new Error(result.error.message || "Ralat pada API Key.");
       }
 
-      if (result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
-        const fullText = result.candidates[0].content.parts[0].text;
-        const parts = fullText.split(/\[IMPAK\]/i);
-        const objText = parts[0].replace(/\[OBJEKTIF\]/i, "").trim();
-        const impakText = parts[1] ? parts[1].trim() : "";
+      const fullText = result.choices[0].message.content;
+      const parts = fullText.split(/\[IMPAK\]/i);
+      const objText = parts[0].replace(/\[OBJEKTIF\]/i, "").trim();
+      const impakText = parts[1] ? parts[1].trim() : "";
 
-        updateReportData({ objektif: objText, impak: impakText });
-      } else {
-        throw new Error("Format AI tidak dikenali.");
-      }
+      updateReportData({
+        objektif: objText,
+        impak: impakText
+      });
+
     } catch (err: any) {
       console.error(err);
-      alert("RALAT AI: Sila pastikan Apps Script anda sudah di-deploy sebagai 'NEW VERSION'.");
-      localStorage.removeItem("GEMINI_API_KEY");
+      alert("RALAT AI: " + err.message);
     } finally {
       setIsAIThinking(false);
     }
@@ -151,7 +157,7 @@ const App: React.FC = () => {
     if (window.confirm("Adakah anda pasti untuk memadam draf ini?")) {
       setReportData(INITIAL_REPORT_DATA);
       localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem("GEMINI_API_KEY");
+      localStorage.removeItem("OPENAI_API_KEY");
     }
   };
 
@@ -226,12 +232,12 @@ const App: React.FC = () => {
             {reportData.logo ? <img src={reportData.logo} className="w-32 h-32 object-contain" alt="Logo" /> : <div className="w-32 h-32 flex items-center justify-center bg-gray-50 rounded-2xl text-gray-300 text-[10px] font-black uppercase p-4 text-center">Logo SSEMJ</div>}
           </div>
           <h1 className="text-5xl md:text-6xl font-black tracking-tighter mb-3 uppercase">SSEMJ ONE PAGE REPORT</h1>
-          <p className="text-sm md:text-base font-bold text-white/90 uppercase tracking-[0.35em] bg-black/20 inline-block px-8 py-2.5 rounded-full backdrop-blur-lg">V24.23.AI DZURRI ENGINE</p>
+          <p className="text-sm md:text-base font-bold text-white/90 uppercase tracking-[0.35em] bg-black/20 inline-block px-8 py-2.5 rounded-full backdrop-blur-lg">V24.23.GPT DZURRI ENGINE</p>
 
           {view === 'form' && (
             <div className="mt-8 flex justify-center">
               <button onClick={handleGenerateAI} disabled={isAIThinking || isSubmitting} className={`flex items-center gap-3 px-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-[0.25em] transition-all shadow-2xl ${isAIThinking ? "bg-indigo-600 text-white scale-95" : "bg-white text-indigo-600 hover:bg-indigo-600 hover:text-white"}`}>
-                {isAIThinking ? <><Loader2 size={20} className="animate-spin" /><span>AI SEDANG MERANCANG...</span></> : <><Zap size={20} className="text-yellow-400" /><span>✨ AI SMART SUGGEST</span></>}
+                {isAIThinking ? <><Loader2 size={20} className="animate-spin" /><span>GPT SEDANG MERANCANG...</span></> : <><Zap size={20} className="text-yellow-400" /><span>✨ CHATGPT SMART SUGGEST</span></>}
               </button>
             </div>
           )}
@@ -246,17 +252,6 @@ const App: React.FC = () => {
             <button onClick={handleReset} className="flex items-center gap-3 px-8 py-4 rounded-[1.5rem] font-black transition-all uppercase tracking-widest text-[10px] bg-red-500/20 text-red-200 border border-red-500/30 shadow-lg"><Trash2 size={16} /> Padam Draf</button>
           )}
         </nav>
-
-        {showSuccess && (
-          <div className="mb-10 animate-in zoom-in duration-700 bg-white/95 backdrop-blur-2xl p-10 rounded-[3.5rem] border-4 border-green-500 shadow-2xl relative flex flex-col sm:flex-row items-center gap-8">
-              <div className="bg-green-500 p-7 rounded-[2rem] text-white shadow-2xl scale-110"><CheckCircle2 size={48} /></div>
-              <div className="text-center sm:text-left flex-1">
-                <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">OPR BERJAYA DIJANA!</h3>
-                <p className="text-[11px] font-bold text-gray-500 uppercase mt-2">Fail telah disimpan ke Drive & Arkib Pusat.</p>
-              </div>
-              <button onClick={() => { setView('archive'); setShowSuccess(false); }} className="px-10 py-5 bg-indigo-600 text-white font-black text-xs uppercase rounded-2xl shadow-2xl">Ke Arkib Digital</button>
-          </div>
-        )}
 
         <main>
           {view === 'form' ? (
@@ -286,7 +281,7 @@ const App: React.FC = () => {
         </main>
 
         <footer className="mt-20 text-center text-white/40 text-[10px] font-black uppercase tracking-[0.5em] pb-12">
-          &copy; 2026 SEKOLAH SENI MALAYSIA JOHOR • V24.23.AI DZURRI
+          &copy; 2026 SEKOLAH SENI MALAYSIA JOHOR • V24.23.GPT DZURRI
         </footer>
       </div>
     </div>
